@@ -1,0 +1,133 @@
+#ESTA CONFIGURACION ES LA MISMA QUE TENEMOS EN EL ARCHIVO Appconfig.java PERO UN UN ARCHIVO YML
+#instances: items:  base-config: defectoa->asignamos la configuracion al circuit breaker que le llamamos "items"
+#podriamos tener muchas configuracion y asignarcelos a los diferentes circuit breaker que tengamos  
+#timelimiter: configuramos el timeout
+
+# slow-call-rate-threshold: 50: si mas del 50% son llamdas llamadas lentas abrimos circuit breaker
+# slow-call-duration-threshold: configuramos los segundos a esperar en las llamadas lentas
+
+#NOTA 2: SI TENEMOS UN APLICATION PROPERTIS O UN YML TIENE MAYOR PRIORIDAD SOBRE LA CONFIGURACION PROGRAMATICA*/
+#NOTA 3 : TIENE MAS PRIORIDAD UNA TIME-OUT QUE UNA LLAMADA LENTA SI TENEMOS UNA CONFIGURACION DE LLAMADA
+#LENTA CON UNA CONFIGURACION DE UNA LLAMADA CON TIME-OUT , LA DEL TIME-OUT SE APLICARA     
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      defecto:
+        sliding-window-size: 6
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 20s
+        permitted-number-of-calls-in-half-open-state: 4
+        
+        #configuracion llamadas lentas
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+        
+    instances:
+      #productos: nos vamos a conectar al microservicio servicio-productos
+      productos:
+        base-config: defecto    
+  timelimiter:
+    configs:
+      defecto:
+        timeout-duration: 2s
+    instances:
+      productos:
+        base-config: defecto    
+          
+
+
+
+
+
+#- id: servicio-productos, ponemos el nombre de nuestro microservicio
+#lb: significa load balancer , la idea que mediante balance de carga podamos acceder a estos recursos(se puede tener mas de una instancia)
+#predicates: puede ser una lista
+#StripPrefix= se requiere por que la ruta esta compuesta por dos segmentos api/productos, el valor 2 indica
+#que tiene dos api/pruductos, si tuviera uno /api/ StripPrefix quedaria asi StripPrefix=1, este es u filtro
+
+#- name: Ejemplo :ponemos el prefijo de nuestro filtro EjemploGatewayFilterFactory (Ejemplo)(solo lo aplicara a la ruta)
+#args: es u map con llave y valor, corresponden a los atributos de nuestra clase Configuracion de EjemploGatewayFilterFactory
+#tienen que llemarse los atributos igual al de la clase Configuracion, este seria un segundo filtro
+
+#cookieValor: AndresGuzman  valores de cookies es sin espacios
+# mensaje: cookieNombre: cookieValor: son los valores que se pasaran la clase de configuracion
+
+#AddRequestHeader,AddResponseHeader y AddRequestParameter son filtros propios del API wateway
+# con SetResponseHeader=Content-Type, text/plain podemos modificar una cabecera y asignarle un nuevo valor
+# con add agregagamos una nueva cabeza con un valor por ejemplo como lo isimos AddRequestHeader=token-request, 123456
+
+#predicates: son reglas restriciones del request por ejemplo en este ejemplo lo aplicamos al servicio-productos
+#en donde el cliente debe de cumplir ciertos agregar en la cabeceras un valor,solo se admite GET o POST
+#tiene que llevar un string wuqey con nombre color igual a verde y una cookie con nombre color y valor azul
+#sino se cumplen esto desde el cliente cuando hace la peticiion no se podra mostrar el contenido/informacion
+#Method: el metodo del request sea get o post
+#Query: son parametros de la ruta url
+#Header= Content-Type, application/json: debe de ir en la cabecera del cliente para poder realziar el request
+
+spring:
+  cloud:
+    gateway:
+      routes:
+      - id: servicio-productos
+        uri: lb://servicio-productos
+        predicates:
+          - Path=/api/productos/**
+          #- Header= token, \d+
+          #- Header= Content-Type, application/json
+          #- Method=GET, POST
+          #- Query=color, verde
+          #- Cookie=color, azul
+        filters:
+        #CircuitBreaker=productos: aqui se agrega nuestro circuit breaker para manejar tolerancia a fallos 
+        #que tenemos configurado arriba y tambien se agrega el timeout 
+          - name: CircuitBreaker
+            args:
+              name: productos
+              #statusCodes: 500: podriamos manejar muchos estados de error los separariamos con comas 500,403 , 405 etc
+              statusCodes: 500
+              #manejamos el camino alternativo, en este caso ponemos la ruta del microservicio servicio-items
+              fallbackUri: forward:/api/items/ver/6/cantidad/5
+          - StripPrefix=2
+          - name: Ejemplo
+            args:
+              mensaje: Hola mi mensaje personalizado
+              cookieNombre: usuario
+              cookieValor: AndresGuzman 
+      - id: servicio-items
+        uri: lb://servicio-items
+        predicates:
+          - Path=/api/items/**
+        filters:
+          - StripPrefix=2 
+          - AddRequestHeader=token-request, 123456
+          - AddResponseHeader=token-response, 12345678
+          - SetResponseHeader=Content-Type, text/plain
+          - AddRequestParameter=nombre, andres
+      - id: servicio-oauth
+        uri: lb://servicio-oauth
+        predicates:
+          - Path=/api/security/**
+        filters:
+          - StripPrefix=2 
+      - id: servicio-usuarios
+        uri: lb://servicio-usuarios
+        predicates:
+          - Path=/api/usuarios/**
+        filters:
+          - StripPrefix=2     
+         
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            
+                
